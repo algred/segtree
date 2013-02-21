@@ -162,14 +162,13 @@ try
                 end
             end
         end
-        RT = double(RT > 0);
+        RT = RT > 0;
         if ~any(RT(:))
             continue;
         end
         rtgidx = connComp(RT); 
         rtglabel = unique(rtgidx);
         rtsel = ones(1, nc);
-        rtscore = [rootSegs{i}(:).Score];
         for j = 1:length(rtglabel)
             rtidx = find(rtgidx == rtglabel(j));
             [~, bestrt] = max(rtscore(rtidx));
@@ -262,7 +261,6 @@ end
     function r = rmRedundant
         % MERGE  remove redundant root candidates
         if length(thisRootSegs) < 2
-            r = thisRootSegs;
             return;
         end
         nnc = length(thisRootSegs);
@@ -279,7 +277,6 @@ end
         end
         T = double(T <= params.er_diff_thre);
         if ~any(T(:))
-            r = thisRootSegs;
             return;
         end
         rootSel = ones(size(thisRootSegs));

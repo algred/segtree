@@ -6,26 +6,26 @@ outroot = pathstring('/research/wvaction/projects/actionlet/v2/demo/2_14');
 
 
  
-for cls = 1:length(class_names)
+for cls = 3:length(class_names)
     idx = find(class_labels == cls);
     for i = 3:3
         vid = idx(i);
-%         load([dataroot filesep class_names{class_labels(vid)} '_' video_list(vid).vname '_trees.mat']);
-%         load([dataroot2 filesep class_names{class_labels(vid)} '_' video_list(vid).vname '_priors.mat']);
-%         load(pathstring(video_list(vid).flowname));
-%         M = motionMagnitude(flow);
-%         if ispc
-%             imgs = read(VideoReader(pathstring(video_list(vid).videoname)));
-%         else
-%             imgs = read_video(pathstring(video_list(vid).videoname), 1);
-%         end
-%         rows = size(imgs, 1);
-%         cols = size(imgs, 2);
-%         N = rows * cols;
+        load([dataroot filesep class_names{class_labels(vid)} '_' video_list(vid).vname '_trees.mat']);
+        load([dataroot2 filesep class_names{class_labels(vid)} '_' video_list(vid).vname '_priors.mat']);
+        load(pathstring(video_list(vid).flowname));
+        M = motionMagnitude(flow);
+        if ispc
+            imgs = read(VideoReader(pathstring(video_list(vid).videoname)));
+        else
+            imgs = read_video(pathstring(video_list(vid).videoname), 1);
+        end
+        rows = size(imgs, 1);
+        cols = size(imgs, 2);
+        N = rows * cols;
         estRootParams = er_params(rows, cols);
         estRootParams.verbose = 1;
         tic;
-        [rootSegs trackID] = treeProp(tree, fmap(:,:,1:5), imgs, flow, M, estRootParams);
+        [rootSegs trackID] = treeProp(tree, fmap, imgs, flow, M, estRootParams);
         toc;
         tracks = unique(trackID);
         cmap = colormap(lines(length(tracks)));
@@ -47,8 +47,8 @@ for cls = 1:length(class_names)
             im1(bgidx + N) = 0;
             im1(bgidx + 2 * N) = 0;
             
-            subplot(1,2,1); imshow(im1);
-            subplot(1,2,2); imshow(im2);
+            subplot(2,1,1); imshow(im1);
+            subplot(2,1,2); imshow(im2);
             keyboard;
         end
         
