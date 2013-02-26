@@ -34,5 +34,12 @@ for i = 1:length(stidx)
     end
 end
 
+idx = find(keep);
+for i = 2:length(idx)
+    p2 = find(P == idx(i));
+    for j = 1:length(p2)
+        tree(p2(j)).Parent = i;
+    end
+end
 tree = tree(keep > 0);
 end

@@ -10,5 +10,5 @@ params.er_ovlp_thre = 0.5;
 params.er_diff_thre = 0.3;
 params.er_sim_thre = 0.5;
 params.er_szprior = 5e3;
-params.er_score_thre = 0.3;
+params.er_score_thre = 0.2;
 end

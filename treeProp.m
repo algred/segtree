@@ -1,4 +1,4 @@
-function [rootSegs trackID] = treeProp(trees, fmap, imgs, flow, motionMag, params)
+function [rootSegs trackID]  = treeProp(trees, fmap, imgs, flow, motionMag, params)
 
 %% Propagate a tree to its neighboring frames
 try
@@ -83,6 +83,7 @@ try
                 prm.cp(k+1,:) = color_counts / max(color_counts);
             end
             prm.PixelIdxList = tree(id).PixelIdxList;
+
             % propagate forward
             for fid = i+1:fmax
                 % spatial prior
@@ -184,7 +185,6 @@ try
         end
     end
     
-    
 catch exception
     getReport(exception)
     keyboard;
@@ -201,15 +201,23 @@ end
             for jj = 1:ntt
                 S(jj) = sum(fmap(thisOffset + thisTree(jj).PixelIdxList))/ length(thisTree(jj).PixelIdxList);
             end
-            tree1 = thisTree(1);
+            keep = ones(size(thisTree));
             for jj = 1:length(idxx)
                 idd = idxx(jj);
                 idxx2 = [idd dtt{idd}];
-                if any(S(idxx2) > params.er_score_thre)
-                    tree1 = [tree1 thisTree(idxx2)];
+                if ~any(S(idxx2) > params.er_score_thre)
+                    keep(idxx2) = 0;
                 end
             end
-            new_trees{ii} = tree1;
+            % restore parent / child pointers 
+            idxx = find(keep);
+            for jj = 2:length(idxx)
+                PP2 = find(PP == idxx(jj));
+                for kk = 1:length(PP2)
+                    thisTree(PP2(kk)).Parent = jj;
+                end
+            end
+            new_trees{ii} = thisTree(keep > 0);
         end
     end
 
@@ -227,14 +235,13 @@ end
                 color_pm = color_pm + reshape(cp(colorMaps((fid-1)*N + 1: fid*N)), rows, cols);
             end
             color_pm = ni(color_pm);
-            
+            tsz = length(prm.PixelIdxList);
             % find the match
             pm = ni(color_pm.*prm.MotionPM.*prm.SpatialPM);
             pm2 = round(pm * 10);
-            tsz = length(prm.PixelIdxList);
             minszdiff = inf;
             seg = [];
-            for ii = 0:20
+            for ii = 2:19
                 bw = imfill((pm2 >= ii), 'holes');
                 CC = bwconncomp(bw);
                 for jj = 1:CC.NumObjects
@@ -244,8 +251,7 @@ end
                         seg = CC.PixelIdxList{jj}';
                     end
                 end
-            end
-            
+            end   
             tsz1 = length(seg);
             if tsz1 <= tsz * 0.7 || tsz1 >= tsz * 1.3
                 seg = [];

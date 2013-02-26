@@ -1,27 +1,36 @@
 function new_trees = rmBackground(trees, fmap, params)
-% RMBACKGROUND  Remove every first level subtrees which have no node located on foreground
-
 [rows cols nfms] = size(fmap);
 N = rows * cols;
+new_trees = cell(size(trees));
 
-for i = 1:length(trees)
-    tree = trees{i};
-    P = [tree(:).Parent];
-    idx = find(P(2:end) == 1)+1; % the root is the whole frame
-    dt = treeDecendt(tree);
-    nt = length(tree);
-    S = zeros(nt, 1);
-    offset = (i - 1) * N;
-    for j = 1:nt
-        S(j) = sum(fmap(offset + tree(j).PixelIdxList))/ length(tree(j).PixelIdxList);
+for ii = 1:nfms
+    thisTree = trees{ii};
+    PP = [thisTree(:).Parent];
+    idxx = find(PP(2:end) == 1)+1; % the root is the whole frame
+    dtt = treeDecendt(thisTree);
+    ntt = length(thisTree);
+    S = zeros(ntt, 1);
+    thisOffset = (ii - 1) * N;
+    for jj = 1:ntt
+        S(jj) = median(fmap(thisOffset + thisTree(jj).PixelIdxList));
     end
-    tree1 = tree(1);
-    for j = 1:length(idx)
-        id = idx(j);
-        idx2 = [id dt{id}];
-        if any(S(idx2) > params.er_score_thre)
-            tree1 = [tree1 tree(idx2)];
-        end    
+    keep = ones(size(thisTree));
+    for jj = 1:length(idxx)
+        idd = idxx(jj);
+        idxx2 = [idd dtt{idd}];
+        if ~any(S(idxx2) > params.er_score_thre)
+            keep(idxx2) = 0;
+        end
     end
-    new_trees{i} = tree1;
+    % restore parent / child pointers
+    idxx = find(keep);
+    for jj = 2:length(idxx)
+        PP2 = find(PP == idxx(jj));
+        for kk = 1:length(PP2)
+            thisTree(PP2(kk)).Parent = jj;
+        end
+    end
+    new_trees{ii} = thisTree(keep > 0);
+end
+
 end

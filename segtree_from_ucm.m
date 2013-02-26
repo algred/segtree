@@ -72,7 +72,7 @@ while length(queue) >= 0 && bryid >= 1
                 % Orientation parallel bounding box
                 c = orParallelBB([xs' ys'],  newR.or);
                 newR.BoundingBox = c;
-                bwBB = poly2mask(c(1,[1:end 1]), c(2, [1:end 1]), rows, scols);
+                bwBB = poly2mask(c(1,[1:end 1]), c(2, [1:end 1]), rows, cols);
                 newR.PixelIdxListBB = find(bwBB);
                 newR.Parent = queue(i);
          
