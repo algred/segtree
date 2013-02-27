@@ -1,4 +1,4 @@
-function [rootSegs trackID]  = treeProp(trees, fmap, imgs, flow, motionMag, params)
+function [rootSegs subtrees]  = treeProp(trees, fmap, imgs, flow, motionMag, params)
 
 %% Propagate a tree to its neighboring frames
 try
@@ -9,7 +9,7 @@ try
     if params.verbose > 0
         fprintf('Removing background subtrees\n');
     end
-    trees = rmBackgroundNested;
+    %trees = rmBackgroundNested;
     
     
     % pre-compute motion and color histogram index maps
@@ -58,7 +58,7 @@ try
         end
         for j = 1:nt
             if params.verbose > 0
-                fprintf('propagate subtree %d ...\n', j);
+                fprintf('propagate subtree %d to frame: ', j);
             end
             id = idx(j);
             subtree.tree_id = i;
@@ -104,6 +104,9 @@ try
                 rootSeg.TemplateId = tid(j);
                 rootSegs{fid} = [rootSegs{fid} rootSeg];
                 prm.PixelIdxList = r;
+                if params.verbose > 0
+                    fprintf('%d ', fid);
+                end
             end
             % propagate backward
             for fid = i-1:-1:fmin
@@ -125,6 +128,12 @@ try
                 rootSeg.TemplateId = tid(j);
                 rootSegs{fid} = [rootSegs{fid} rootSeg];
                 prm.PixelIdxList = r;
+                if params.verbose > 0
+                    fprintf('%d ', fid);
+                end
+            end
+            if params.verbose > 0
+               fprintf('\n');
             end
         end
     end
@@ -147,6 +156,9 @@ try
     % identify tracks
     ST = double(ST > 0);
     trackID = connComp(ST);
+    for i = 1:length(subtrees)
+        subtrees(i).track_id = trackID(i);
+    end
 
     % remove redundant again
     for i = 1:nfms
@@ -238,10 +250,10 @@ end
             tsz = length(prm.PixelIdxList);
             % find the match
             pm = ni(color_pm.*prm.MotionPM.*prm.SpatialPM);
-            pm2 = round(pm * 10);
+            pm2 = round(pm * 20);
             minszdiff = inf;
             seg = [];
-            for ii = 2:19
+            for ii = 1:19
                 bw = imfill((pm2 >= ii), 'holes');
                 CC = bwconncomp(bw);
                 for jj = 1:CC.NumObjects

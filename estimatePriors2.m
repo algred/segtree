@@ -4,7 +4,7 @@ function [cp cpmap mpmap fmap] = estimatePriors2(trees, imgs, motionMag, params)
 
 cols = size(imgs, 2);
 rows = size(imgs, 1);
-nfms = size(motionMag, 3);
+nfms = length(trees);
 N = cols * rows;
      
 CH = zeros(1, params.pr_cnbins);

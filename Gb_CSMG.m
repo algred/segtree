@@ -48,7 +48,7 @@ wC = round(0.016*imDiag);
 wM = wC;
 
 alpha_AB = 1.9;
-alpha_M = 1;
+alpha_M = 2;
 
 disp('soft-segmentation ...');
 

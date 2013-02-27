@@ -7,11 +7,14 @@ for ii = 1:nfms
     thisTree = trees{ii};
     PP = [thisTree(:).Parent];
     idxx = find(PP(2:end) == 1)+1; % the root is the whole frame
+    if isempty(idxx)
+        continue;
+    end
     dtt = treeDecendt(thisTree);
     ntt = length(thisTree);
     S = zeros(ntt, 1);
     thisOffset = (ii - 1) * N;
-    for jj = 1:ntt
+    for jj = 2:ntt
         S(jj) = median(fmap(thisOffset + thisTree(jj).PixelIdxList));
     end
     keep = ones(size(thisTree));
@@ -21,6 +24,12 @@ for ii = 1:nfms
         if ~any(S(idxx2) > params.er_score_thre)
             keep(idxx2) = 0;
         end
+    end
+    % keep at least one subtree
+    if ~any(keep(2:end))
+        [~,id] = max(S(idxx));
+        idxx2 = [idxx(id) dtt{idxx(id)}];
+        keep(idxx2) = 1;
     end
     % restore parent / child pointers
     idxx = find(keep);

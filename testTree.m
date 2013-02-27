@@ -19,18 +19,19 @@ params.er_delta = 3;
 
 for cls = 2:length(class_names)
     idx = find(class_labels == cls);
-    for i = 3:3
+    fprintf('%s :', class_names{cls});
+    for i = 1:2
         vid = idx(i);
-        wvname = [outroot filesep class_names{class_labels(vid)} '_' video_list(vid).vname '_tree.avi'];
-        if exist('wvname', 'file')
-            continue;
-        end
-        wobj = VideoWriter(wvname, 'Uncompressed AVI');
-        wobj.FrameRate = 1;
-        open(wobj);
+%         wvname = [outroot filesep class_names{class_labels(vid)} '_' video_list(vid).vname '_tree.avi'];
+%         if exist(wvname, 'file')
+%             continue;
+%         end
+%         wobj = VideoWriter(wvname, 'Uncompressed AVI');
+%         wobj.FrameRate = 1;
+%         open(wobj);
         
         clear('trees', 'trees2', 'trees3', 'trees4', 'ucms', 'gb_CSMGS');
-          imgs = read_video(pathstring(video_list(vid).videoname), 1);
+        imgs = read_video(pathstring(video_list(vid).videoname), 1);
         load(pathstring(video_list(vid).flowname));
         M = motionMagnitude(flow);
         rows = size(imgs, 1);
@@ -58,14 +59,15 @@ for cls = 2:length(class_names)
             subplot(3, 3, 5); displayTree(I, trees2{frame_id});
             subplot(3, 3, 6); displayTree(I, trees3{frame_id});
             subplot(3, 3, 7); displayTree(I, trees4{frame_id});
-            subplot(3, 3, 8); imagesc(fmap(:,:,frame_id));
+            subplot(3, 3, 8); imagesc(fmap(:,:,frame_id)); colorbar;
             subplot(3, 3, 9); displayTree(I, trees5{frame_id});
             keyboard;
-            frame = getframe(gcf);
-            writeVideo(wobj, frame);
+%             frame = getframe(gcf);
+%             writeVideo(wobj, frame);
         end
         
         save([outroot filesep class_names{class_labels(vid)} '_' video_list(vid).vname '_trees.mat'], 'trees5', 'trees3', 'ucms','gb_CSMGS', 'fmap');
         close(wobj);
     end
+    fprintf('\n');
 end

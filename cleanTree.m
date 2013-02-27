@@ -10,9 +10,8 @@ maxsz = params.maxsz_ratio * N;
 
 for i = 2:length(tree)
     sz = length(tree(i).PixelIdxList);
-    szBB = length(tree(i).PixelIdxListBB);
     sz1 = length(tree( tree(i).Parent ).PixelIdxList);
-    if sz >= sz1 * params.min_shrink_ratio || szBB >= maxsz
+    if sz >= sz1 * params.min_shrink_ratio || sz >= maxsz
         child = find( P == i );
         for j = 1:length(child)
             tree( child(j) ).Parent = tree(i).Parent;

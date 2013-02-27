@@ -13,7 +13,6 @@ r.xr = [];
 r.yr = [];
 
 r.BoundingBox = [1 cols cols 1; 1 1 rows rows];
-r.PixelIdxListBB = 1:cols*rows;
 r.Parent = 1;
 
 tree(1) = r;
@@ -31,7 +30,7 @@ if params.DISPLAY
     h = figure('Name', 'Segmentation');
     set(0,'CurrentFigure',h);
 end
-while length(queue) >= 0 && bryid >= 1
+while length(queue) >= 0 && bryvs(bryid) >= 30
     label = bwlabel(ucm <= bryvs(bryid));
     new_queue = [];
     for i = 1:length(queue)
@@ -55,7 +54,6 @@ while length(queue) >= 0 && bryid >= 1
                
                 newR.PixelIdxList = pixelList;
 
-                
                 % Moments of the region: center and orientation
                 [ys xs] = ind2sub([rows cols], newR.PixelIdxList);
                 [x0 y0 or] = segProperty([xs' ys']);
@@ -72,8 +70,6 @@ while length(queue) >= 0 && bryid >= 1
                 % Orientation parallel bounding box
                 c = orParallelBB([xs' ys'],  newR.or);
                 newR.BoundingBox = c;
-                bwBB = poly2mask(c(1,[1:end 1]), c(2, [1:end 1]), rows, cols);
-                newR.PixelIdxListBB = find(bwBB);
                 newR.Parent = queue(i);
          
                 len = length(tree);
