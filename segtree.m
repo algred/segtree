@@ -1,4 +1,4 @@
-function [tree tree2 tree3 tree4 ucm gb_CSMG] = segtree(I, u, v, hu, hv, params)
+function [tree tree2 tree3 tree4 ucm gb_CSMG orC] = segtree(I, u, v, hu, hv, params)
 
 M = motionMap(u, v);
 rows = size(I, 1);

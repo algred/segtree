@@ -6,9 +6,9 @@ try
     N = rows * cols;
     
     % remove subtrees that are on background
-    if params.verbose > 0
-        fprintf('Removing background subtrees\n');
-    end
+%     if params.verbose > 0
+%         fprintf('Removing background subtrees\n');
+%     end
     %trees = rmBackgroundNested;
     
     
@@ -39,6 +39,9 @@ try
     grid_width = round(cols / er_grid_r);
     grid_height = round(rows / er_grid_r);
     for i = 1:nfms
+        if isempty(trees{i})
+            continue;
+        end
         fmin = max(1, i - params.er_winsz);
         fmax = min(nfms, i + params.er_winsz);
         tree = trees{i};
@@ -69,8 +72,10 @@ try
             if size(tree(id).PixelIdxList, 1) > 1
                 tree(id).PixelIdxList = tree(id).PixelIdxList';
             end
+            rootSeg.FromProp = 0;
             rootSeg.PixelIdxList = tree(id).PixelIdxList;
             rootSeg.TemplateId = tid(j);
+            
             rootSegs{i} = [rootSegs{i} rootSeg];
             fidx = union(fidx, tree(id).PixelIdxList);
             % color prior treeProp.m(keep the same during tracking)
@@ -100,6 +105,7 @@ try
                 if isempty(r)
                     break;
                 end
+                rootSeg.FromProp = 1;
                 rootSeg.PixelIdxList = r;
                 rootSeg.TemplateId = tid(j);
                 rootSegs{fid} = [rootSegs{fid} rootSeg];
@@ -124,6 +130,7 @@ try
                 if isempty(r)
                     break;
                 end
+                rootSeg.FromProp = 1;
                 rootSeg.PixelIdxList = r;
                 rootSeg.TemplateId = tid(j);
                 rootSegs{fid} = [rootSegs{fid} rootSeg];
@@ -145,7 +152,7 @@ try
         thisRootSegs = rootSegs{i};
         offset = (i-1) * N;
         for j = 1:length(thisRootSegs)
-            thisRootSegs(j).Score = sum(fmap(offset + thisRootSegs(j).PixelIdxList));
+            thisRootSegs(j).Score = sum(fmap(offset + thisRootSegs(j).PixelIdxList)) / (length(thisRootSegs(j).PixelIdxList)+params.er_szbias);
         end
         rootSegs{i} = rmRedundant;
         if params.verbose > 0
@@ -304,6 +311,7 @@ end
         gidx = connComp(T);
         glabel = unique(gidx);
         thisScore = [thisRootSegs(:).Score];
+        fromProp = [thisRootSegs(:).FromProp];
         for jj = 1:length(glabel)
             cccIdx = find(gidx == glabel(jj));
             tpid = [thisRootSegs(cccIdx).TemplateId];
@@ -314,9 +322,15 @@ end
                     ST(tpid(hh), tpid(kk)) = 1;
                 end
             end
-            cccScore = thisScore(cccIdx);
-            [~, bestccc] = max(cccScore);
-            rootSel(cccIdx([1:bestccc-1 bestccc+1:end])) = 0;
+            cccflg = (fromProp(cccIdx) < 1);
+
+            if ~any(cccflg)
+                cccScore = thisScore(cccIdx);
+                [~, bestccc] = max(cccScore);
+                rootSel(cccIdx([1:bestccc-1 bestccc+1:end])) = 0;
+            else
+                rootSel(cccIdx(~cccflg)) = 0;
+            end
         end
         r = thisRootSegs(rootSel > 0);
     end

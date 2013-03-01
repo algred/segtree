@@ -30,11 +30,11 @@ if params.DISPLAY
     h = figure('Name', 'Segmentation');
     set(0,'CurrentFigure',h);
 end
-while length(queue) >= 0 && bryvs(bryid) >= 30
-    label = bwlabel(ucm <= bryvs(bryid));
-    new_queue = [];
-    for i = 1:length(queue)
-        try
+try
+    while length(queue) >= 0 && bryvs(bryid) >= 30
+        label = bwlabel(ucm < bryvs(bryid));
+        new_queue = [];
+        for i = 1:length(queue)
             r = tree(queue(i));
             segmap = label(r.PixelIdxList);
             lv = setdiff(unique(segmap), 0);
@@ -51,9 +51,9 @@ while length(queue) >= 0 && bryvs(bryid) >= 30
                 if sz < minsz
                     continue;
                 end
-               
+                
                 newR.PixelIdxList = pixelList;
-
+                
                 % Moments of the region: center and orientation
                 [ys xs] = ind2sub([rows cols], newR.PixelIdxList);
                 [x0 y0 or] = segProperty([xs' ys']);
@@ -71,35 +71,39 @@ while length(queue) >= 0 && bryvs(bryid) >= 30
                 c = orParallelBB([xs' ys'],  newR.or);
                 newR.BoundingBox = c;
                 newR.Parent = queue(i);
-         
+                
                 len = length(tree);
                 tree(len+1) = newR;
                 new_queue = [new_queue len+1];
             end
-        catch exception
-            getReport(exception)
+        end
+        if params.DISPLAY > 0
+            fprintf('bryv: %f\n', bryvs(bryid));
+            map = zeros(rows, cols);
+            for i = 1:length(tree)
+                map(tree(i).PixelIdxList) = i;
+            end
+            %imagesc(map);
+            clf;
+            imshow(map, lines);
+            hold on;
+            for i = 2:length(tree)
+                c = tree(i).BoundingBox;
+                plot(c(1,[1:end 1]),c(2,[1:end 1]),'r');
+            end
+            hold off;
             keyboard;
         end
-    end
-    if params.DISPLAY > 0
-        fprintf('bryv: %f\n', bryvs(bryid));
-        map = zeros(rows, cols);
-        for i = 1:length(tree)
-            map(tree(i).PixelIdxList) = i;
+        bryid = bryid - 1;
+        if bryid <= 0
+            break;
         end
-        %imagesc(map);
-        clf;
-        imshow(map, lines);
-        hold on;
-        for i = 2:length(tree)
-            c = tree(i).BoundingBox;
-            plot(c(1,[1:end 1]),c(2,[1:end 1]),'r');
-        end
-        hold off;
-        keyboard;
+        queue = new_queue;
     end
-    bryid = bryid - 1;
-    queue = new_queue;
+    
+catch exception
+    getReport(exception)
+    keyboard;
 end
 
 

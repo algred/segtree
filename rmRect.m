@@ -21,7 +21,7 @@ for i = 1:length(sidx)
     flg = ~(vflg | hflg);
     lflg = (abs(dx1(flg) ./ (dy1(flg)+eps) - dx2(flg) ./ (dy2(flg) + eps)) < 0.001);
     r = (sum(vflg | hflg) + sum(lflg)) / (length(x) - 2);
-    if r > 0.5
+    if r > 0.6
         keep([id D{id}]) = 0;
     end
     mask(tree(id).PixelIdxList) = 0;

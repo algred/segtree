@@ -23,6 +23,7 @@ tids = unique(T);
 tmap = zeros(length(tids), 2);
 tmap(:,1) = tids';
 tmap(:,2) = tids';
+return;
 if length(tids) <= 1
     return;
 end
@@ -86,7 +87,12 @@ for i = 1:length(L)
 %                 else
 %                     M(tid, j) = getSimilarity(C1.Feat, C2.Feat, 1:3, params.er_cov_disturb, params.er_cov_scale);
 %                 end
-                M(tid, j) = getSimilarity(C1.Feat, C2.Feat, 1:3, params.er_cov_disturb, params.er_cov_scale);
+                [ys1 xs1] = ind2sub([rows, cols], C1.PixelIdxList);
+                [ys2 xs2] = ind2sub([rows, cols], C2.PixelIdxList);
+                meanX1 = mean(xs1); meanY1 = mean(ys1); meanX2 = mean(xs2); meanY2 = mean(ys2);
+                d1 = sqrt((xs1 - meanX1).*(xs1 - meanX1) + (ys1 - meanY1).*(ys1 - meanY1));
+                d2 = sqrt((xs2 - meanX2).*(xs2 - meanX2) + (ys2 - meanY2).*(ys2 - meanY2));
+                M(tid, j) = getSimilarity([C1.Feat; d1], [C2.Feat; d2], 1:4, params.er_cov_disturb, params.er_cov_scale);
                 M(j, tid) = M(tid, j);
             catch exception
                 getReport(exception)
@@ -100,7 +106,7 @@ end
 % remove short tracks
 tids = unique(T);
 select = ones(size(T));
-nthre = round(nfms * params.er_min_len_ratio);
+nthre = min(15, round(nfms * params.er_min_len_ratio));
 L = zeros(size(tids));
 for i = 1:length(tids)
     flg = (T == tids(i));
