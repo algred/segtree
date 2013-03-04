@@ -1,20 +1,30 @@
-function [rootSegs subtrees]  = treeProp(trees, fmap, imgs, flow, motionMag, params)
+function [rootSegs subtrees]  = treeProp(trees, fmap, imgs, flow,  params)
 
 %% Propagate a tree to its neighboring frames
 try
     [rows cols nfms] = size(fmap);
     N = rows * cols;
     
+    %quantize the colors 
+    tmp = randsample(nfms, 5);
+    for i = 1:length(tmp)
+        cim((i-1)*rows + 1 : i*rows, :, 1) = imgs(:,:,1,tmp(i));
+        cim((i-1)*rows + 1 : i*rows, :, 2) = imgs(:,:,2,tmp(i));
+        cim((i-1)*rows + 1 : i*rows, :, 3) = imgs(:,:,3,tmp(i));
+    end
+    
     % pre-compute motion and color histogram index maps
-    [~, cmap] = rgb2ind(lab2uint8(rgb2lab(imgs(:,:,:,1))), params.er_cnbins);
+    [~, cmap] = rgb2ind(lab2uint8(rgb2lab(cim)), params.er_cnbins);
     colorMaps = zeros(rows, cols, nfms);
-    motionMaps = zeros(rows, cols, nfms);
+    colorPriors = zeros(nfms, params.er_cnbins);
     u = zeros(rows, cols, nfms);
     v = zeros(rows, cols, nfms);
     bu = zeros(rows, cols, nfms);
     bv = zeros(rows, cols, nfms);
     for i = 1:nfms
         colorMaps(:,:,i) = medfilt2(rgb2ind(lab2uint8(rgb2lab(imgs(:,:,:,i))), cmap) + 1, [5 5], 'symmetric');
+        colorPriors(i, :) = histc(colorMaps((i-1)*N+1 : i*N)', 1:params.er_cnbins);
+        colorPriors(i, :) = colorPriors(i, :) / sum(colorPriors) + eps;
         u(:,:,i) = medfilt2(flow.u(:,:,i), [3 3], 'symmetric');
         v(:,:,i) = medfilt2(flow.v(:,:,i), [3 3], 'symmetric');
         bu(:,:,i) = medfilt2(flow.bu(:,:,i), [3 3], 'symmetric');
@@ -70,11 +80,11 @@ try
             % color prior treeProp.m(keep the same during tracking)
             prm.cp = zeros(1 + ndt, params.er_cnbins);
             color_counts = histc(color_map(tree(id).PixelIdxList), 1:params.er_cnbins);
-            prm.cp(1,:) = color_counts / max(color_counts);
+            prm.cp(1,:) = color_counts / sum(color_counts);
             for k = 1:ndt
                 id1 = dt{id}(k);
                 color_counts = histc(color_map(tree(id1).PixelIdxList), 1:params.er_cnbins);
-                prm.cp(k+1,:) = color_counts / max(color_counts);
+                prm.cp(k+1,:) = color_counts / sum(color_counts);
             end
             prm.PixelIdxList = tree(id).PixelIdxList;
 
@@ -89,9 +99,7 @@ try
                 if isempty(bb)
                     break;
                 end 
-                % motion prior
-                motionX = motionMag((fid-2) * N + prm.PixelIdxList);
-                prm.MotionPM = ni(normpdf(motionMag(bb(2):bb(2)+bb(4)-1, bb(1):bb(1)+bb(3)-1, fid), mean(motionX), std(motionX)));
+
                 % track the segment
                 r = trackSegNested;
                 if isempty(r)
@@ -127,9 +135,7 @@ try
                 if isempty(bb)
                     break;
                 end
-                % motion prior
-                motionX = motionMag(fid * N + prm.PixelIdxList);
-                prm.MotionPM = ni(normpdf(motionMag(bb(2):bb(2)+bb(4)-1, bb(1):bb(1)+bb(3)-1, fid), mean(motionX), std(motionX)));
+
                 % track the segment
                 r = trackSegNested;
                 if isempty(r)
@@ -205,10 +211,16 @@ try
         rtglabel = unique(rtgidx);
         rtsel = ones(1, nc);
         rtscore = [rootSegs{i}(:).Score];
+        fromPropFlg = [rootSegs{i}(:).FromProp];
         for j = 1:length(rtglabel)
             rtidx = find(rtgidx == rtglabel(j));
-            [~, bestrt] = max(rtscore(rtidx));
-            rtsel(rtidx([1:bestrt-1 bestrt+1:end])) = 0;
+            fpflg = fromPropFlg(rtidx) < 1;
+            if ~any(fpflg)
+                [~, bestrt] = max(rtscore(rtidx));
+                rtsel(rtidx([1:bestrt-1 bestrt+1:end])) = 0;
+            else
+                rtsel(rtidx(~fpflg)) = 0;
+            end
         end
         if params.verbose > 0
             fprintf('remove redundant on frame %d again, before = %d', i, length(rootSegs{i}));
@@ -234,19 +246,18 @@ end
             % color prior
             color_pm = zeros(bb(4), bb(3));
             for ii = 1:size(prm.cp, 1)
-                cp = prm.cp(ii,:);
+                cp = prm.cp(ii,:)./colorPriors(fid, :);
                 thisColorMap = colorMaps(bb(2):bb(2)+bb(4)-1, bb(1):bb(1)+bb(3)-1, fid);
                 color_pm = color_pm + reshape(cp(thisColorMap(:)), bb(4), bb(3));
             end
             color_pm = ni(color_pm);
             if params.DISPLAY > 0
-                subplot(3, 1, 1); imagesc(color_pm);colorbar;
-                subplot(3, 1, 2); imagesc(prm.MotionPM);colorbar;
-                subplot(3, 1, 3); imagesc(prm.SpatialPM);colorbar;
+                subplot(2, 1, 1); imagesc(color_pm);colorbar;
+                subplot(2, 1, 2); imagesc(prm.SpatialPM);colorbar;
                 keyboard;
             end
             % find the match
-            pm = ni(color_pm.*prm.MotionPM.*prm.SpatialPM);
+            pm = ni(color_pm.*prm.SpatialPM);
             pm2 = round(pm * 20);
             minszdiff = inf;
             seg = [];
@@ -337,8 +348,8 @@ end
         prm.PixelIdxList = sub2ind([rows, cols], ys, xs);
         
         thisBB = [min(xs) min(ys) max(xs)-min(xs)+1 max(ys)-min(ys)+1];
-        grid_width = ceil(thisBB(4) / er_grid_r);
-        grid_height = ceil(thisBB(3) / er_grid_r);
+        grid_width = ceil(thisBB(3) / er_grid_r);
+        grid_height = ceil(thisBB(4) / er_grid_r);
         gxs = min(grid_width, floor((xs-thisBB(1)+1)/er_grid_r) + 1);
         gys = min(grid_height, floor((ys-thisBB(2)+1)/er_grid_r) + 1);
         grid = zeros(grid_height, grid_width);
@@ -346,7 +357,8 @@ end
         grid = imresize(grid, [thisBB(4), thisBB(3)], 'nearest');
         [yys xxs] = find(grid);
         predBB = boundingBox(xxs', yys');
-        r = poly2mask(predBB(1, [1:end 1]), predBB(2, [1:end 1]), thisBB(4), thisBB(3));
+        r = double(poly2mask(predBB(1, [1:end 1]), predBB(2, [1:end 1]), thisBB(4), thisBB(3)));
+        r(sub2ind([thisBB(4), thisBB(3)], yys, xxs)) = 2;
         if sum(r(:)) < (tsz*params.er_max_shrink)
             r = [];
             thisBB = [];

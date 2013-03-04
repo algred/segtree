@@ -4,7 +4,10 @@ function [C tmap] = treeTrack(fmap, imgs, rootSegs, params)
 N = rows * cols;
 C = struct;
 ind = 1;
-for ii = 1:nfms
+for ii = 1:length(rootSegs)
+    if isempty(rootSegs{ii})
+        continue;
+    end
     thisSegs = rootSegs{ii};
     im = imgs(:,:,:,ii);
     for jj = 1:length(thisSegs)
@@ -23,7 +26,7 @@ tids = unique(T);
 tmap = zeros(length(tids), 2);
 tmap(:,1) = tids';
 tmap(:,2) = tids';
-return;
+
 if length(tids) <= 1
     return;
 end
@@ -81,12 +84,6 @@ for i = 1:length(L)
                 [yid xid] = ind2sub(size(d), ind);
                 C1 = C(T == tids(j) & F == D{j}(xid));
                 C2 = C(T == tids(tid) & F == D{tid}(yid));
-%                sz_ratio = length(C1.PixelIdxList) / length(C2.PixelIdxList);
-%                 if sz_ratio < 1/params.er_sz_chg_thre || sz_ratio > params.er_sz_chg_thre
-%                     M(tid, j) = 0;
-%                 else
-%                     M(tid, j) = getSimilarity(C1.Feat, C2.Feat, 1:3, params.er_cov_disturb, params.er_cov_scale);
-%                 end
                 [ys1 xs1] = ind2sub([rows, cols], C1.PixelIdxList);
                 [ys2 xs2] = ind2sub([rows, cols], C2.PixelIdxList);
                 meanX1 = mean(xs1); meanY1 = mean(ys1); meanX2 = mean(xs2); meanY2 = mean(ys2);
