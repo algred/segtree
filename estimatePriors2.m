@@ -8,10 +8,8 @@ nfms = length(trees);
 N = cols * rows;
      
 CH = zeros(1, params.pr_cnbins);
-MH = zeros(1, params.pr_maxbgm);
 
 indC = zeros(rows, cols, nfms);
-indM = zeros(rows, cols, nfms);
 [~, cmap] = rgb2ind(lab2uint8(rgb2lab(imgs(:,:,:,1))), params.pr_cnbins);
 
 nr = 0;

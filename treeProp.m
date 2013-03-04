@@ -5,13 +5,6 @@ try
     [rows cols nfms] = size(fmap);
     N = rows * cols;
     
-    % remove subtrees that are on background
-%     if params.verbose > 0
-%         fprintf('Removing background subtrees\n');
-%     end
-    %trees = rmBackgroundNested;
-    
-    
     % pre-compute motion and color histogram index maps
     [~, cmap] = rgb2ind(lab2uint8(rgb2lab(imgs(:,:,:,1))), params.er_cnbins);
     colorMaps = zeros(rows, cols, nfms);
@@ -20,10 +13,8 @@ try
     v = zeros(rows, cols, nfms);
     bu = zeros(rows, cols, nfms);
     bv = zeros(rows, cols, nfms);
-    er_mnbins = round(params.tr_maxm/2);
     for i = 1:nfms
         colorMaps(:,:,i) = medfilt2(rgb2ind(lab2uint8(rgb2lab(imgs(:,:,:,i))), cmap) + 1, [5 5], 'symmetric');
-        motionMaps(:,:,i) = medfilt2(min(er_mnbins, round(motionMag(:,:,i)/2))+1, [5 5], 'symmetric');
         u(:,:,i) = medfilt2(flow.u(:,:,i), [3 3], 'symmetric');
         v(:,:,i) = medfilt2(flow.v(:,:,i), [3 3], 'symmetric');
         bu(:,:,i) = medfilt2(flow.bu(:,:,i), [3 3], 'symmetric');
@@ -36,8 +27,6 @@ try
     subtrees = [];
     rootSegs = cell(1, nfms);
     er_grid_r = min(cols / 50, rows / 50);
-    grid_width = round(cols / er_grid_r);
-    grid_height = round(rows / er_grid_r);
     for i = 1:nfms
         if isempty(trees{i})
             continue;
@@ -91,19 +80,32 @@ try
 
             % propagate forward
             for fid = i+1:fmax
+                tsz = length(prm.PixelIdxList);
                 % spatial prior
-                [ys xs] = ind2sub([rows, cols], prm.PixelIdxList);
+                [ys xs] = ind2sub([rows, cols], prm.PixelIdxList); 
                 xs = round(xs + u(prm.PixelIdxList + (fid-2)*N));
                 ys = round(ys + v(prm.PixelIdxList + (fid-2)*N));
-                prm.SpatialPM = idx2predMask;
+                [bb prm.SpatialPM] = idx2predMask;
+                if isempty(bb)
+                    break;
+                end 
                 % motion prior
-                motionX = motionMaps((fid-2) * N + prm.PixelIdxList);
-                prm.MotionPM = ni(reshape(normpdf(motionMaps((fid-1) * N + 1 : fid*N), ...
-                    mean(motionX), std(motionX)), rows, cols));
+                motionX = motionMag((fid-2) * N + prm.PixelIdxList);
+                prm.MotionPM = ni(normpdf(motionMag(bb(2):bb(2)+bb(4)-1, bb(1):bb(1)+bb(3)-1, fid), mean(motionX), std(motionX)));
                 % track the segment
                 r = trackSegNested;
                 if isempty(r)
                     break;
+                end
+                if params.DISPLAY > 0
+                    im = imgs(:,:,:,fid);
+                    im2 = imgs(:,:,:,fid-1);
+                    mask1 = uint8(zeros(rows, cols,3));
+                    mask2 = uint8(zeros(rows, cols,3));
+                    mask1(r) = im(r); mask1(r+N) = im(r+N); mask1(r+2*N) = im(r+2*N);
+                    mask2(r) = im2(r); mask2(r+N) = im2(r+N); mask2(r+2*N) = im2(r+2*N);
+                    subplot(2, 1, 1); imshow(mask2); subplot(2, 1, 2); imshow(mask1);
+                    keyboard;
                 end
                 rootSeg.FromProp = 1;
                 rootSeg.PixelIdxList = r;
@@ -116,19 +118,32 @@ try
             end
             % propagate backward
             for fid = i-1:-1:fmin
+                tsz = length(prm.PixelIdxList);
                 % spatial prior
                 [ys xs] = ind2sub([rows, cols], prm.PixelIdxList);
                 xs = round(xs + bu(prm.PixelIdxList + fid*N));
                 ys = round(ys + bv(prm.PixelIdxList + fid*N));
-                prm.SpatialPM = idx2predMask;
+                [bb prm.SpatialPM] = idx2predMask;
+                if isempty(bb)
+                    break;
+                end
                 % motion prior
-                motionX = motionMaps(fid * N + prm.PixelIdxList);
-                prm.MotionPM = ni(reshape(normpdf(motionMaps((fid-1) * N + 1 : fid*N), ...
-                    mean(motionX), std(motionX)), rows, cols));
+                motionX = motionMag(fid * N + prm.PixelIdxList);
+                prm.MotionPM = ni(normpdf(motionMag(bb(2):bb(2)+bb(4)-1, bb(1):bb(1)+bb(3)-1, fid), mean(motionX), std(motionX)));
                 % track the segment
                 r = trackSegNested;
                 if isempty(r)
                     break;
+                end
+                if params.DISPLAY > 0
+                    im = imgs(:,:,:,fid);
+                    im2 = imgs(:,:,:,fid+1);
+                    mask1 = uint8(zeros(rows, cols,3));
+                    mask2 = uint8(zeros(rows, cols,3));
+                    mask1(r) = im(r); mask1(r+N) = im(r+N); mask1(r+2*N) = im(r+2*N);
+                    mask2(r) = im2(r); mask2(r+N) = im2(r+N); mask2(r+2*N) = im2(r+2*N);
+                    subplot(2, 1, 1); imshow(mask2); subplot(2, 1, 2); imshow(mask1);
+                    keyboard;
                 end
                 rootSeg.FromProp = 1;
                 rootSeg.PixelIdxList = r;
@@ -208,37 +223,6 @@ catch exception
     getReport(exception)
     keyboard;
 end
-    function new_trees = rmBackgroundNested
-        for ii = 1:nfms
-            thisTree = trees{ii};
-            PP = [thisTree(:).Parent];
-            idxx = find(PP(2:end) == 1)+1; % the root is the whole frame
-            dtt = treeDecendt(thisTree);
-            ntt = length(thisTree);
-            S = zeros(ntt, 1);
-            thisOffset = (ii - 1) * N;
-            for jj = 1:ntt
-                S(jj) = sum(fmap(thisOffset + thisTree(jj).PixelIdxList))/ length(thisTree(jj).PixelIdxList);
-            end
-            keep = ones(size(thisTree));
-            for jj = 1:length(idxx)
-                idd = idxx(jj);
-                idxx2 = [idd dtt{idd}];
-                if ~any(S(idxx2) > params.er_score_thre)
-                    keep(idxx2) = 0;
-                end
-            end
-            % restore parent / child pointers 
-            idxx = find(keep);
-            for jj = 2:length(idxx)
-                PP2 = find(PP == idxx(jj));
-                for kk = 1:length(PP2)
-                    thisTree(PP2(kk)).Parent = jj;
-                end
-            end
-            new_trees{ii} = thisTree(keep > 0);
-        end
-    end
 
     function seg = trackSegNested
         % TRACKSEG   Using color, motion and spatial priors to track a segment
@@ -248,13 +232,19 @@ end
         %
         try
             % color prior
-            color_pm = zeros(rows, cols);
+            color_pm = zeros(bb(4), bb(3));
             for ii = 1:size(prm.cp, 1)
                 cp = prm.cp(ii,:);
-                color_pm = color_pm + reshape(cp(colorMaps((fid-1)*N + 1: fid*N)), rows, cols);
+                thisColorMap = colorMaps(bb(2):bb(2)+bb(4)-1, bb(1):bb(1)+bb(3)-1, fid);
+                color_pm = color_pm + reshape(cp(thisColorMap(:)), bb(4), bb(3));
             end
             color_pm = ni(color_pm);
-            tsz = length(prm.PixelIdxList);
+            if params.DISPLAY > 0
+                subplot(3, 1, 1); imagesc(color_pm);colorbar;
+                subplot(3, 1, 2); imagesc(prm.MotionPM);colorbar;
+                subplot(3, 1, 3); imagesc(prm.SpatialPM);colorbar;
+                keyboard;
+            end
             % find the match
             pm = ni(color_pm.*prm.MotionPM.*prm.SpatialPM);
             pm2 = round(pm * 20);
@@ -272,17 +262,17 @@ end
                 end
             end   
             tsz1 = length(seg);
-            if tsz1 <= tsz * 0.7 || tsz1 >= tsz * 1.3
+            if tsz1 <= tsz * params.er_max_shrink || tsz1 >= tsz * params.er_max_expand
                 seg = [];
                 return;
             end
+            [yys xxs] = ind2sub([bb(4), bb(3)], seg);
+            seg = sub2ind([rows, cols], yys + bb(2) - 1, xxs + bb(1) -1);
         catch exception1
             getReport(exception1)
             keyboard;
         end
     end
-
-
 
     function r = rmRedundant
         % MERGE  remove redundant root candidates
@@ -335,21 +325,32 @@ end
         r = thisRootSegs(rootSel > 0);
     end
 
-    function r = idx2predMask
+    function [thisBB r] = idx2predMask
         xyflg = xs >= 1 & xs <= cols & ys >= 1 & ys <= rows;
         xs = xs(xyflg);
         ys = ys(xyflg);
-        if length(xs) < 100
-            r = (zeros(rows, cols) > 0);
+        if length(xs) < 10
+            r = [];
+            thisBB = [];
             return;
         end
-        gxs = min(grid_width, floor(xs/er_grid_r) + 1);
-        gys = min(grid_height, floor(ys/er_grid_r) + 1);
+        prm.PixelIdxList = sub2ind([rows, cols], ys, xs);
+        
+        thisBB = [min(xs) min(ys) max(xs)-min(xs)+1 max(ys)-min(ys)+1];
+        grid_width = ceil(thisBB(4) / er_grid_r);
+        grid_height = ceil(thisBB(3) / er_grid_r);
+        gxs = min(grid_width, floor((xs-thisBB(1)+1)/er_grid_r) + 1);
+        gys = min(grid_height, floor((ys-thisBB(2)+1)/er_grid_r) + 1);
         grid = zeros(grid_height, grid_width);
-        grid(gys, gxs) = 1;
-        grid = imresize(grid, [rows, cols], 'nearest');
+        grid(sub2ind([grid_height, grid_width], gys, gxs)) = 1;
+        grid = imresize(grid, [thisBB(4), thisBB(3)], 'nearest');
         [yys xxs] = find(grid);
         predBB = boundingBox(xxs', yys');
-        r = poly2mask(predBB(1, [1:end 1]), predBB(2, [1:end 1]), rows, cols);
+        r = poly2mask(predBB(1, [1:end 1]), predBB(2, [1:end 1]), thisBB(4), thisBB(3));
+        if sum(r(:)) < (tsz*params.er_max_shrink)
+            r = [];
+            thisBB = [];
+            return;
+        end
     end
 end
