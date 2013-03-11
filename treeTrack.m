@@ -14,8 +14,11 @@ for ii = 1:length(rootSegs)
         C(ind).fid = ii;
         C(ind).PixelIdxList = thisSegs(jj).PixelIdxList;
         C(ind).tid = thisSegs(jj).TemplateId;
-        C(ind).score = sum(fmap(N * (ii - 1) + C(ind).PixelIdxList));
-        C(ind).Feat = double([im(C(ind).PixelIdxList); im(C(ind).PixelIdxList + N); im(C(ind).PixelIdxList + 2 * N)]);
+        C(ind).score = sum(fmap(N * (ii - 1) + C(ind).PixelIdxList))/length(C(ind).PixelIdxList+params.er_szbias);
+        [ys xs] = ind2sub([rows, cols], C(ind).PixelIdxList);
+        meanX = mean(xs); meanY = mean(ys);
+        d = sqrt((xs - meanX).*(xs - meanX) + (ys - meanY).*(ys - meanY));     
+        C(ind).Feat = double([im(C(ind).PixelIdxList); im(C(ind).PixelIdxList + N); im(C(ind).PixelIdxList + 2 * N); d]);
         ind = ind + 1;
     end
 end
@@ -50,9 +53,9 @@ for i = 1:nt-1
     maxt = max(D{i});
     for j = i+1:nt
         if mint > max(D{j})
-            M(i, j) = getSimilarity(C(I(i,1)).Feat, C(I(j,2)).Feat, 1:3, params.er_cov_disturb, params.er_cov_scale);
+            M(i, j) = getSimilarity(C(I(i,1)).Feat, C(I(j,2)).Feat, 1:4, params.er_cov_disturb, params.er_cov_scale);
         elseif maxt < min(D{j})
-            M(i, j) = getSimilarity(C(I(i,2)).Feat, C(I(j,1)).Feat, 1:3, params.er_cov_disturb, params.er_cov_scale);
+            M(i, j) = getSimilarity(C(I(i,2)).Feat, C(I(j,1)).Feat, 1:4, params.er_cov_disturb, params.er_cov_scale);
         end
         M(j, i) = M(i, j);
     end
@@ -66,7 +69,6 @@ for i = 1:length(L)
     while maxm > params.er_match_thre
         M(tid2, :) = -1;
         M(:, tid2) = -1;
-        
         D{tid} = [D{tid} D{tid2}];
         T( T == tids(tid2) ) = tids(tid);
         tmap(tmap(:,1) == tids(tid2),2) = tids(tid);
@@ -84,12 +86,7 @@ for i = 1:length(L)
                 [yid xid] = ind2sub(size(d), ind);
                 C1 = C(T == tids(j) & F == D{j}(xid));
                 C2 = C(T == tids(tid) & F == D{tid}(yid));
-                [ys1 xs1] = ind2sub([rows, cols], C1.PixelIdxList);
-                [ys2 xs2] = ind2sub([rows, cols], C2.PixelIdxList);
-                meanX1 = mean(xs1); meanY1 = mean(ys1); meanX2 = mean(xs2); meanY2 = mean(ys2);
-                d1 = sqrt((xs1 - meanX1).*(xs1 - meanX1) + (ys1 - meanY1).*(ys1 - meanY1));
-                d2 = sqrt((xs2 - meanX2).*(xs2 - meanX2) + (ys2 - meanY2).*(ys2 - meanY2));
-                M(tid, j) = getSimilarity([C1.Feat; d1], [C2.Feat; d2], 1:4, params.er_cov_disturb, params.er_cov_scale);
+                M(tid, j) = getSimilarity(C1.Feat, C2.Feat, 1:4, params.er_cov_disturb, params.er_cov_scale);
                 M(j, tid) = M(tid, j);
             catch exception
                 getReport(exception)
@@ -103,7 +100,8 @@ end
 % remove short tracks
 tids = unique(T);
 select = ones(size(T));
-nthre = min(15, round(nfms * params.er_min_len_ratio));
+%nthre = min(15, round(nfms * params.er_min_len_ratio));
+nthre = round(nfms * params.er_min_len_ratio);
 L = zeros(size(tids));
 for i = 1:length(tids)
     flg = (T == tids(i));

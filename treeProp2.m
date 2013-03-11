@@ -1,35 +1,10 @@
-function [rootSegs subtrees]  = treeProp(trees, fmap, imgs, flow,  params)
+function [rootSegs subtrees]  = treeProp2(trees, fmap, imgs, colorMaps, colorPriors, u, v, bu, bv,  params)
 
 %% Propagate a tree to its neighboring frames
 try
     [rows cols nfms] = size(fmap);
     N = rows * cols;
-    
-    %quantize the colors 
-    tmp = randsample(nfms, 5);
-    for i = 1:length(tmp)
-        cim((i-1)*rows + 1 : i*rows, :, 1) = imgs(:,:,1,tmp(i));
-        cim((i-1)*rows + 1 : i*rows, :, 2) = imgs(:,:,2,tmp(i));
-        cim((i-1)*rows + 1 : i*rows, :, 3) = imgs(:,:,3,tmp(i));
-    end
-    
-    % pre-compute motion and color histogram index maps
-    [~, cmap] = rgb2ind(lab2uint8(rgb2lab(cim)), params.er_cnbins);
-    colorMaps = zeros(rows, cols, nfms);
-    colorPriors = zeros(nfms, params.er_cnbins);
-    u = zeros(rows, cols, nfms);
-    v = zeros(rows, cols, nfms);
-    bu = zeros(rows, cols, nfms);
-    bv = zeros(rows, cols, nfms);
-    for i = 1:nfms
-        colorMaps(:,:,i) = medfilt2(rgb2ind(lab2uint8(rgb2lab(imgs(:,:,:,i))), cmap) + 1, [5 5], 'symmetric');
-        colorPriors(i, :) = histc(colorMaps((i-1)*N+1 : i*N)', 1:params.er_cnbins);
-        colorPriors(i, :) = colorPriors(i, :) / sum(colorPriors) + eps;
-        u(:,:,i) = medfilt2(flow.u(:,:,i), [3 3], 'symmetric');
-        v(:,:,i) = medfilt2(flow.v(:,:,i), [3 3], 'symmetric');
-        bu(:,:,i) = medfilt2(flow.bu(:,:,i), [3 3], 'symmetric');
-        bv(:,:,i) = medfilt2(flow.bv(:,:,i), [3 3], 'symmetric');
-    end
+    min_root_sz = round(params.min_root_sz_ratio * N);
     
     % propagate the root of each first level subtree of every frame to its
     % neighboring frames
@@ -52,20 +27,18 @@ try
         end
         idx = idx + 1;
         nt = length(idx);
-        fidx = [];
         tid = zeros(1, nt);
         if params.verbose > 0
             fprintf('Processing frame %d, subtree number = %d\n', i, nt);
         end
         for j = 1:nt
-            if params.verbose > 0
-                fprintf('propagate subtree %d to frame: ', j);
-            end
             id = idx(j);
+            if length(tree(id).PixelIdxList) < min_root_sz
+                continue;
+            end
             subtree.tree_id = i;
             subtree.node_id = id;
-            subtrees = [subtrees subtree];
-            tid(j) = length(subtrees);
+            tid(j) = length(subtrees)+1;
             ndt = length(dt{id});
             if size(tree(id).PixelIdxList, 1) > 1
                 tree(id).PixelIdxList = tree(id).PixelIdxList';
@@ -73,10 +46,9 @@ try
             rootSeg.FromProp = 0;
             rootSeg.PixelIdxList = tree(id).PixelIdxList;
             rootSeg.TemplateId = tid(j);
-            
             rootSegs{i} = [rootSegs{i} rootSeg];
-            fidx = union(fidx, tree(id).PixelIdxList);
-            % color prior treeProp.m(keep the same during tracking)
+            
+            % color prior (keep the same during tracking)
             prm.cp = zeros(1 + ndt, params.er_cnbins);
             color_counts = histc(color_map(tree(id).PixelIdxList), 1:params.er_cnbins);
             prm.cp(1,:) = color_counts / sum(color_counts);
@@ -85,9 +57,13 @@ try
                 color_counts = histc(color_map(tree(id1).PixelIdxList), 1:params.er_cnbins);
                 prm.cp(k+1,:) = color_counts / sum(color_counts);
             end
-            prm.PixelIdxList = tree(id).PixelIdxList;
-
+            [ys xs] = ind2sub([rows, cols], tree(id).PixelIdxList);
+            bbox = [i min(xs) min(ys) max(xs)-min(xs)+1 max(ys)-min(ys)+1];
+            if params.verbose > 0
+                fprintf('propagate subtree %d to frame: ', j);
+            end
             % propagate forward
+            prm.PixelIdxList = tree(id).PixelIdxList;
             for fid = i+1:fmax
                 tsz = length(prm.PixelIdxList);
                 % spatial prior
@@ -97,8 +73,7 @@ try
                 [bb prm.SpatialPM] = idx2predMask;
                 if isempty(bb)
                     break;
-                end 
-
+                end                
                 % track the segment
                 r = trackSegNested;
                 if isempty(r)
@@ -119,11 +94,14 @@ try
                 rootSeg.TemplateId = tid(j);
                 rootSegs{fid} = [rootSegs{fid} rootSeg];
                 prm.PixelIdxList = r;
+                [ys xs] = ind2sub([rows, cols], prm.PixelIdxList);
+                bbox = [fid min(xs) min(ys) max(xs) - min(xs) + 1  max(ys) - min(ys) + 1; bbox];
                 if params.verbose > 0
                     fprintf('%d ', fid);
                 end
             end
             % propagate backward
+            prm.PixelIdxList = tree(id).PixelIdxList;
             for fid = i-1:-1:fmin
                 tsz = length(prm.PixelIdxList);
                 % spatial prior
@@ -134,7 +112,6 @@ try
                 if isempty(bb)
                     break;
                 end
-
                 % track the segment
                 r = trackSegNested;
                 if isempty(r)
@@ -155,10 +132,14 @@ try
                 rootSeg.TemplateId = tid(j);
                 rootSegs{fid} = [rootSegs{fid} rootSeg];
                 prm.PixelIdxList = r;
+                [ys xs] = ind2sub([rows, cols], prm.PixelIdxList);
+                bbox = [fid min(xs) min(ys) max(xs) - min(xs) + 1  max(ys) - min(ys) + 1; bbox];
                 if params.verbose > 0
                     fprintf('%d ', fid);
                 end
             end
+            subtree.bbox = bbox;
+            subtrees = [subtrees subtree];
             if params.verbose > 0
                fprintf('\n');
             end
@@ -167,17 +148,6 @@ try
     
     % refine the root candidate segments
     nst = length(subtrees);
-    sfid = [subtrees(:).tree_id];
-    CF = zeros(nst); % conflict matrix
-    for i = 1:nfms
-        flg = (sfid == i);
-        if ~any(flg)
-            continue;
-        end
-        CF(flg, flg) = 1;
-    end
-    CF(sub2ind(size(CF), [1:nst], [1:nst])) = 0;   
-    
     ST = eye(nst);
     for i = 1:nfms
         thisRootSegs = rootSegs{i};
@@ -329,12 +299,8 @@ end
             tpid = sort(tpid);
             for kk = 1:length(tpid)-1
                 for hh = kk+1:length(tpid)
-                    ST1 = ST;
-                    ST1(tpid(kk), tpid(hh)) = 1;
-                    ST1(tpid(hh), tpid(kk)) = 1;
-                    if ~isConflict(ST1)
-                        ST = ST1;
-                    end
+                    ST(tpid(kk), tpid(hh)) = 1;
+                    ST(tpid(hh), tpid(kk)) = 1;
                 end
             end
             cccflg = (fromProp(cccIdx) < 1);
@@ -377,20 +343,6 @@ end
             r = [];
             thisBB = [];
             return;
-        end
-    end
-
-    function flg = isConflict(ST)
-        tracks = connComp(ST);
-        trackIDS = unique(tracks);
-        for ii = 1:length(trackIDS)
-            ids = find(tracks == trackIDS(ii));
-            CF1 = CF(ids, ids);
-            if ~any(CF1(:))
-                flg = 0;
-            else
-                flg = 1;
-            end
         end
     end
 end
