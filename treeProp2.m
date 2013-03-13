@@ -148,6 +148,17 @@ try
     
     % refine the root candidate segments
     nst = length(subtrees);
+    sfid = [subtrees(:).tree_id];
+    CF = zeros(nst); % conflict matrix
+    for i = 1:nfms
+        flg = (sfid == i);
+        if ~any(flg)
+            continue;
+        end
+        CF(flg, flg) = 1;
+    end
+    CF(sub2ind(size(CF), [1:nst], [1:nst])) = 0; 
+    
     ST = eye(nst);
     for i = 1:nfms
         thisRootSegs = rootSegs{i};
@@ -155,10 +166,8 @@ try
         for j = 1:length(thisRootSegs)
             thisRootSegs(j).Score = sum(fmap(offset + thisRootSegs(j).PixelIdxList)) / (length(thisRootSegs(j).PixelIdxList)+params.er_szbias);
         end
-        rootSegs{i} = rmRedundant;
-        if params.verbose > 0
-            fprintf('remove redundant on frame %d, before = %d, after = %d\n', i, length(thisRootSegs), length(rootSegs{i}));
-        end
+        mergeTracks;
+        rootSegs{i} = thisRootSegs;
     end
     
     % identify tracks
@@ -200,6 +209,9 @@ try
                 rtsel(rtidx([1:bestrt-1 bestrt+1:end])) = 0;
             else
                 rtsel(rtidx(~fpflg)) = 0;
+                if(sum(fpflg) > 1)
+                    keyboard;
+                end
             end
         end
         if params.verbose > 0
@@ -265,10 +277,8 @@ end
         end
     end
 
-    function r = rmRedundant
-        % MERGE  remove redundant root candidates
+    function mergeTracks
         if length(thisRootSegs) < 2
-            r = thisRootSegs;
             return;
         end
         nnc = length(thisRootSegs);
@@ -288,32 +298,36 @@ end
             r = thisRootSegs;
             return;
         end
-        rootSel = ones(size(thisRootSegs));
         gidx = connComp(T);
         glabel = unique(gidx);
-        thisScore = [thisRootSegs(:).Score];
-        fromProp = [thisRootSegs(:).FromProp];
         for jj = 1:length(glabel)
-            cccIdx = find(gidx == glabel(jj));
-            tpid = [thisRootSegs(cccIdx).TemplateId];
+            tpid = [thisRootSegs(gidx == glabel(jj)).TemplateId];
             tpid = sort(tpid);
             for kk = 1:length(tpid)-1
                 for hh = kk+1:length(tpid)
-                    ST(tpid(kk), tpid(hh)) = 1;
-                    ST(tpid(hh), tpid(kk)) = 1;
+                    ST1 = ST;
+                    ST1(tpid(kk), tpid(hh)) = 1;
+                    ST1(tpid(hh), tpid(kk)) = 1;
+                    if ~isConflict(ST1)
+                        ST = ST1;
+                    end
                 end
             end
-            cccflg = (fromProp(cccIdx) < 1);
+        end
+    end
 
-            if ~any(cccflg)
-                cccScore = thisScore(cccIdx);
-                [~, bestccc] = max(cccScore);
-                rootSel(cccIdx([1:bestccc-1 bestccc+1:end])) = 0;
-            else
-                rootSel(cccIdx(~cccflg)) = 0;
+    function flg = isConflict(thisST)
+        tracks = connComp(thisST);
+        trackIDS = unique(tracks);
+        flg = 0;
+        for ii = 1:length(trackIDS)
+            ids = find(tracks == trackIDS(ii));
+            CF1 = CF(ids, ids);
+            if any(CF1(:))
+                flg = 1;
+                break;
             end
         end
-        r = thisRootSegs(rootSel > 0);
     end
 
     function [thisBB r] = idx2predMask
@@ -345,4 +359,5 @@ end
             return;
         end
     end
+
 end

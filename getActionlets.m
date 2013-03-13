@@ -3,6 +3,7 @@ function [A T] = getActionlets(trees, imgs, flow, fmap, params)
 %
 % A is a struct array containing segments of actionlets with the fields:
 %   tid: track id
+%   pid: parent actionlet id
 %   isRoot: is 1 if is from root segment
 %   start: starting frame
 %   end:   ending frame
@@ -16,7 +17,8 @@ function [A T] = getActionlets(trees, imgs, flow, fmap, params)
 N = rows * cols;
 er_grid_r = min(cols / 50, rows / 50);
 % quantize the colors
-tmp = randsample(nfms, 5);
+%tmp = randsample(nfms, 5);
+tmp = 1:5;
 h = fspecial('disk',5);
 for i = 1:size(imgs, 4)
     imgs(:,:,:,i) = imfilter(imgs(:,:,:,i), h);
@@ -93,9 +95,10 @@ for i = 1:length(trees)
         a.end = max(st(j).bbox(:,1));
         a.bbox = st(j).bbox(:,2:end);
         a.isRoot = 1;
+        a.pid = length(A)+1;
         A = [A a];
         segs = dt{st(j).node_id};
-        a.isRoot = 1;
+        a.isRoot = 0;
         % propagage every segment of subtree
         for k = 1:length(segs)
             if params.verbose > 0

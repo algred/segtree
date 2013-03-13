@@ -110,7 +110,7 @@ for i = 1:length(tids)
         select(flg) = 0;
     end
 end
-if ~any(flg)
+if ~any(select)
     [~, id] = max(L);
     flg = (T == tids(id));
     select(flg) = 1;
