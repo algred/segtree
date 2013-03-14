@@ -37,7 +37,12 @@ for i = 1:length(A)
         hog1(grFlg) = sum(hog(frFlg, :)); hof1(grFlg) = sum(hof(frFlg, :));
         mbhx1(grFlg) = sum(mbhx(frFlg, :)); mbhy1(grFlg) = sum(mbhy(frFlg, :));
     end
-    F(i, :) = [normr(hog1) normr(hof1) normr(mbhx1) normr(mbhy1)];
+    % L1 normalization
+    hog1 = hog1 ./ repmat(sum(hog1, 2)+eps, 1, size(hog1, 2));
+    hof1 = hof1 ./ repmat(sum(hof1, 2)+eps, 1, size(hof1, 2));
+    mbhx1 = mbhx1 ./ repmat(sum(mbhx1, 2)+eps, 1, size(mbhx1, 2));
+    mbhy1 = mbhy1 ./ repmat(sum(mbhy1, 2)+eps, 1, size(mbhy1, 2));
+    F(i, :) = [hog1 hof1 mbhx1 mbhy1];
 end
 
 end
